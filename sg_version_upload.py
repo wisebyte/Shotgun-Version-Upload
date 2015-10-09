@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 '''
-Modified from Shotgun Upload script 
+Modified from Shotgun Upload script to be used with Superbook DPX workflow.
+
+1.3 - add a section to deal with compressed files
+1.2 - populates the daily review playlist with each incoming version
+1.1 - uploads new ProRes version to the correct Shot and sets status to Ready for Review
 '''
 # ------------------------------------------------------------------------------
 # Imports
@@ -13,8 +17,10 @@ import os
 import optparse
 import shutil
 import datetime
+import glob
+import time
 
-__version__ = '1.0'
+__version__ = '1.3'
 __status__ = 'Stable'
 
 # ------------------------------------------------------------------------------
@@ -40,8 +46,9 @@ default_entity_type = 'Version'
 default_field_name = 'sg_uploaded_movie'
 # --- Default upload path --- #
 # added by Meza #
-default_upload_path = "/Users/someplace/Desktop/test"
-default_uploaded_path = "/Users/someplace/Desktop/moved"
+default_RAR_path = "/Users/someplace/rar" # put the files here if it's compressed
+default_upload_path = "/Users/someplace/RAR" # these are the files needing to be uploaded to Shotgun
+default_uploaded_path = "/Users/someplace/DAM" # move here after the files are uploaded so DAM can take them
 # --- experimental --- #
 use_colors = True
 # --- END USER-DEFINED VARIABLES --- #
@@ -211,9 +218,9 @@ def get_entity(filename, m):
 
     pipeline_name = m.groups(1)[1]
     if pipeline_name == "LY" or pipeline_name == "ly":
-    	pipeline_name = "layout"
+    	pipeline_name = "ly review"
     elif pipeline_name == "CP" or pipeline_name == "cp":
-    	pipeline_name = "composition"
+    	pipeline_name = "cp Review"
     else:
     	return False
     filters = [['project','is',{'type':'Project','id':proj['id']}],
@@ -222,26 +229,30 @@ def get_entity(filename, m):
     if sg.find_one('Task',filters):
     	task = sg.find_one('Task',filters)
     else:
+    	print 'no task found!'
     	return False
     print 'task found:',task
+    
+    # ---- create playlist if needed ---- #
+    prefix = m.groups(1)[1]
+    prefix = prefix.upper()
+    print 'prefix:',prefix
+    playlist = prefix + ' ' + unicode(datetime.date.today())
+    print 'playlist:',playlist
+    plfilter = [['code','is',playlist]]
+    result = sg.find_one('Playlist',plfilter)
+    if result == None:
+		data = {'project':{"type":"Project","id":proj['id']},'code': playlist}
+		result = sg.create('Playlist',data)
+
     
     entity_type = options.entity_type
     if not pass_custom_regexes(entity_name):
         return False
-
-    # ----- Create Daily Review Playlist ----- #
-	plfilter = [['sg_episode_number','is',episode_number]]
-	episode = sg.find_one('Project',filter)
-	prefix = m.groups(1)[1]
-	prefix = prefix.upper()
-	playlist = prefix + ' ' + unicode(datetime.date.today())
-	plfilter = [['code','is',playlist]]
-	result = sg.find_one('Playlist',filter)
-	
-	if result == None:
-		data = {'project':{"type":"Project","id":episode['id']},'code': playlist}
-		result = sg.create('Playlist',data)
-    # ----- Create Daily Review Playlist ----- #
+    plfilter = [['code','is',playlist]]
+    result = sg.find_one('Playlist',plfilter)
+    
+   
 
 
 
@@ -253,7 +264,7 @@ def get_entity(filename, m):
     		'sg_status_list':'rev',
     		'code': entity_name,
     		'user':{'type':'HumanUser','id':52},
-    		'playlists':playlist}
+    		'playlists':[{'type':'Playlist','id':result['id']}]}
     	sg.create('Version',data)     
     	task_data = {'sg_status_list':'rev'}
     	sg.update ('Task',task['id'],task_data)
@@ -290,6 +301,8 @@ def check_attachment_exists(entity_type, entity_id):
 # Main
 # ------------------------------------------------------------------------------
 if __name__ == '__main__':
+
+            			
     """Main program execution. Parse options from command line and ask the user
     to provide any missing variables. Validate the input and then attempt to parse
     the entity name from the filename according to the regex_pattern defined in
@@ -374,6 +387,38 @@ if __name__ == '__main__':
                             LOG.debug("Uploaded file %s to %s '%s'" % (file_path, options.entity_type, entity['code'] ))
                     else:
                         do_notok(filename, "File already exists on %s '%s' in field %s. Skipping." % (options.entity_type, entity['code'], options.field_name))
+                        
+    """
+    Check the leftovers. To see if any of it are compressed files.
+    If previous compression queue are cleared first. If not cleared wait until it's cleared.
+    
+    If it's a compressed file, that will need to be transformed first, so send those to transformation location.
+
+    If it's not a compressed file start at the waiting_path and traverse the files and directories send them to RAR_path for processing.
+    """
+
+    
+# see if previous RAR jobs are done - use glob to ignore hidden files like .DS_store and .fctmp
+    hidden_files = default_RAR_path + "/*"
+    RAR_ready = False
+    if len(glob.glob(hidden_files))==0:
+    	RAR_ready = True
+
+# go through all files waiting to be processed in the waiting path and either holds them
+# or sending them to the proper place for processing
+   # - time.sleep(15)    	
+    for root, dirs, files in os.walk(default_upload_path):
+        LOG.info("[%s]" % root)
+        for filename in files:
+            LOG.debug(" processing %s..." % (filename),)
+            file_path = os.path.join(root, filename)
+            # find the entity name defined by the pattern within the file_path
+            m = pattern.search(filename)
+            if not filename.startswith ('.'):
+            	if not m or len(m.groups()) == 0:
+            		if RAR_ready:
+            			time.sleep(1)
+            			shutil.move (file_path,default_RAR_path)
 
         # --- Summarize what happened --- #
         LOG.info( " " )
