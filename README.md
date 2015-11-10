@@ -14,6 +14,10 @@ This is how the script can figure out what to do with the Version
 * Version Number
 
 ## Changelog
+**v2.0 - 2015.11.10**
++ add a section to deal with compressed files
++ populates the daily review playlist with each incoming version
++ uploads new ProRes version to the correct Shot and sets status to Ready for Review
 
 **v1.0 - 2015.07.23**
 
