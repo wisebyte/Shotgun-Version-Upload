@@ -46,9 +46,9 @@ default_entity_type = 'Version'
 default_field_name = 'sg_uploaded_movie'
 # --- Default upload path --- #
 # added by Meza #
-default_RAR_path = "/Users/someplace/rar" # put the files here if it's compressed
-default_upload_path = "/Users/someplace/RAR" # these are the files needing to be uploaded to Shotgun
-default_uploaded_path = "/Users/someplace/DAM" # move here after the files are uploaded so DAM can take them
+default_RAR_path = "/Users/Shared/RAR2AJA/rar" # put the files here if it's compressed
+default_upload_path = "/Volumes/sbWorkspace/SuperbookMFT/RAR" # these are the files needing to be uploaded to Shotgun
+default_uploaded_path = "/Volumes/sbWorkspace/SuperbookMFT/DAM" # move here after the files are uploaded so DAM can take them
 # --- experimental --- #
 use_colors = True
 # --- END USER-DEFINED VARIABLES --- #
@@ -406,7 +406,6 @@ if __name__ == '__main__':
 
 # go through all files waiting to be processed in the waiting path and either holds them
 # or sending them to the proper place for processing
-   # - time.sleep(15)    	
     for root, dirs, files in os.walk(default_upload_path):
         LOG.info("[%s]" % root)
         for filename in files:
